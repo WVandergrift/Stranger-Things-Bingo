@@ -173,33 +173,9 @@
 
     <div id="cards"></div>
 
-    <script>
-        const OPTIONS = [
-            "Eleven",
-            "Will the Wise",
-            "Mike Wheeler",
-            "Dustin",
-            "Max Mayfield",
-            "Steve",
-            "Hopper",
-            "Joyce Byers",
-            "Hawkins",
-            "Hawkins Lab",
-            "The Upside Down",
-            "Starcourt Mall",
-            "Scoops Ahoy",
-            "The Arcade",
-            "Vecna's Clock",
-            "Walkie-Talkie",
-            "Christmas Lights",
-            "Bicycle",
-            "Waffles",
-            "The Squawk",
-            "Radio",
-            "Baseball Bat",
-            "Vecna",
-            "Portal"
-        ];
+    <script type="module">
+        import { BINGO_OPTIONS } from "./options.js";
+        const OPTIONS = BINGO_OPTIONS || [];
 
         const cardsEl = document.getElementById("cards");
         const countInput = document.getElementById("card-count");
