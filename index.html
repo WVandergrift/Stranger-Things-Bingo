@@ -78,7 +78,7 @@
             background: rgba(0, 0, 0, 0.75);
             border: 1px solid var(--stranger-red);
             padding: 15px;
-            max-height: 250px;
+            max-height: 500px;
             width: 280px;
             overflow-y: auto;
             font-size: 1.8rem;
@@ -382,6 +382,7 @@
         let balls = [];
         let particles, cageMesh, cageGroup;
         let lightningGroup;
+        let nextLightningTime = 0;
         
         let currentState = 'IDLE'; 
         let spinSpeed = 0.012;
@@ -523,8 +524,16 @@
                 const glow = new THREE.Mesh(new THREE.TubeGeometry(path, 20, 0.38, 6, false), glowMat.clone());
                 bolt.userData.baseOpacity = 0.75;
                 glow.userData.baseOpacity = 0.25;
-                boltGroup.position.set((Math.random() - 0.5) * 100, 10 + Math.random() * 35, (Math.random() - 0.5) * 100);
-                boltGroup.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+                bolt.geometry.computeBoundingBox();
+                boltGroup.userData.baseHeight = bolt.geometry.boundingBox.max.y - bolt.geometry.boundingBox.min.y;
+                boltGroup.userData.depth = 70 + Math.random() * 40;
+                boltGroup.userData.xOffset = (Math.random() - 0.5) * 0.8;
+                boltGroup.userData.heightFactor = 0.1 + Math.random() * 0.5;
+                boltGroup.userData.roll = (Math.random() - 0.5) * 0.25;
+                boltGroup.userData.age = 0;
+                boltGroup.userData.ttl = 120 + Math.floor(Math.random() * 140);
+                positionLightningBolt(boltGroup);
+                boltGroup.rotation.set(0, 0, boltGroup.userData.roll);
                 boltGroup.add(glow);
                 boltGroup.add(bolt);
                 lightningGroup.add(boltGroup);
@@ -532,14 +541,35 @@
             scene.add(lightningGroup);
         }
 
+        function positionLightningBolt(boltGroup) {
+            const dir = new THREE.Vector3();
+            const right = new THREE.Vector3();
+            const up = new THREE.Vector3();
+            camera.getWorldDirection(dir);
+            right.crossVectors(dir, camera.up).normalize();
+            up.crossVectors(right, dir).normalize();
+            const depth = boltGroup.userData.depth;
+            const vFov = THREE.MathUtils.degToRad(camera.fov);
+            const height = 2 * Math.tan(vFov / 2) * depth;
+            const width = height * camera.aspect;
+            const xOffset = (width / 2) * boltGroup.userData.xOffset;
+            boltGroup.position.copy(camera.position);
+            boltGroup.position.addScaledVector(dir, depth);
+            boltGroup.position.addScaledVector(right, xOffset);
+            boltGroup.position.addScaledVector(up, height / 2);
+            const targetHeight = height * boltGroup.userData.heightFactor;
+            const baseHeight = boltGroup.userData.baseHeight || 1;
+            boltGroup.scale.set(1, targetHeight / baseHeight, 1);
+        }
+
         function generateBoltPath() {
             const points = [];
             let x = 0, y = 0, z = 0;
             points.push(new THREE.Vector3(x, y, z));
-            for (let i = 0; i < 7; i++) {
-                x += (Math.random() - 0.5) * 6;
-                y -= 3 + Math.random() * 4;
-                z += (Math.random() - 0.5) * 6;
+            for (let i = 0; i < 10; i++) {
+                x += (Math.random() - 0.5) * 7;
+                y -= 5 + Math.random() * 5;
+                z += (Math.random() - 0.5) * 7;
                 points.push(new THREE.Vector3(x, y, z));
             }
             return new THREE.CatmullRomCurve3(points);
@@ -899,12 +929,15 @@
             }
             particles.geometry.attributes.position.needsUpdate = true;
 
+            const nowMs = performance.now();
             lightningGroup.children.forEach((boltGroup, i) => {
-                const flicker = Math.random() * 0.5 + 0.2;
-                boltGroup.children.forEach((mesh) => {
-                    mesh.material.opacity = mesh.userData.baseOpacity * flicker;
-                });
-                if (Math.random() < 0.006) {
+                boltGroup.userData.age += 1;
+                const ttlExpired = boltGroup.userData.age > boltGroup.userData.ttl;
+                const sparkChance = Math.random() < 0.0015;
+                const canSpark = nowMs >= nextLightningTime;
+                if ((ttlExpired || sparkChance) && canSpark) {
+                    boltGroup.userData.age = 0;
+                    boltGroup.userData.ttl = 120 + Math.floor(Math.random() * 140);
                     const path = generateBoltPath();
                     const glow = boltGroup.children[0];
                     const bolt = boltGroup.children[1];
@@ -912,11 +945,19 @@
                     bolt.geometry.dispose();
                     glow.geometry = new THREE.TubeGeometry(path, 20, 0.38, 6, false);
                     bolt.geometry = new THREE.TubeGeometry(path, 20, 0.16, 6, false);
-                    boltGroup.position.y = 10 + Math.random() * 40;
+                    bolt.geometry.computeBoundingBox();
+                    boltGroup.userData.baseHeight = bolt.geometry.boundingBox.max.y - bolt.geometry.boundingBox.min.y;
+                    boltGroup.userData.depth = 70 + Math.random() * 40;
+                    boltGroup.userData.xOffset = (Math.random() - 0.5) * 0.8;
+                    boltGroup.userData.heightFactor = 0.1 + Math.random() * 0.5;
+                    nextLightningTime = nowMs + 1000 + Math.random() * 4000;
                 }
-                if (i % 2 === 0) {
-                    boltGroup.rotation.z += 0.001;
-                }
+                const flicker = Math.random() * 0.5 + 0.2;
+                boltGroup.children.forEach((mesh) => {
+                    mesh.material.opacity = mesh.userData.baseOpacity * flicker;
+                });
+                boltGroup.rotation.z = boltGroup.userData.roll;
+                positionLightningBolt(boltGroup);
             });
 
             renderer.render(scene, camera);
